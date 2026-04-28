@@ -10,7 +10,6 @@ import KernelAbstractions: @kernel, @index, functional, CPU, synchronize
 import SparseArrays: getcolptr, getnzval
 
 include("devices.jl")
-include("utils.jl")
 
 # ----------------------------------------------------------------------------
 # Sparse matrix traits used by the preconditioners.
@@ -29,11 +28,11 @@ struct CSCFormat <: AbstractMatrixFormat end
 # do not share a supertype with their host counterparts, so dispatch on
 # AbstractSparseMatrixCSC/CSR is not portable across backends.
 sparsemat_format_type(::SparseMatrixCSC) = CSCFormat()
-sparsemat_format_type(::Union{SparseMatrixCSR, ThreadedSparseMatrixCSR}) = CSRFormat()
+sparsemat_format_type(::SparseMatrixCSR) = CSRFormat()
 
 # Wrapped to avoid type piracy when extending for device-side sparse types.
-colvals(A::Union{SparseMatrixCSR, ThreadedSparseMatrixCSR}) = SparseMatricesCSR.getcolval(A)
-getrowptr(A::Union{SparseMatrixCSR, ThreadedSparseMatrixCSR}) = SparseMatricesCSR.getrowptr(A)
+colvals(A::SparseMatrixCSR) = SparseMatricesCSR.getcolval(A)
+getrowptr(A::SparseMatrixCSR) = SparseMatricesCSR.getrowptr(A)
 
 include("l1_gauss_seidel.jl")
 
@@ -44,7 +43,5 @@ export PackedBufferCache, MatrixViewCache
 export AbstractDevice, AbstractCPUDevice, AbstractGPUDevice,
     SequentialCPUDevice, PolyesterDevice, CudaDevice,
     default_backend, value_type, index_type
-
-export ThreadedSparseMatrixCSR
 
 end

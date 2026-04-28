@@ -154,18 +154,6 @@ end
             test_fwd_buffer_fn,
         )
         test_sym_result("Packed, Forward, CPU CSR", B, x, y_exp_fwd, D_Dl1_exp, 2, ForwardSweep())
-        C = ThreadedSparseMatrixCSR(B)
-        test_sym_result(
-            "Packed, Forward, CPU Threaded CSR",
-            C,
-            x,
-            y_exp_fwd,
-            D_Dl1_exp,
-            2,
-            ForwardSweep(),
-            PackedBufferCache(),
-            test_fwd_buffer_fn,
-        )
 
         # Backward sweep packed buffer tests
         test_sym_result(
@@ -191,17 +179,6 @@ end
             test_bwd_buffer_fn,
         )
         test_sym_result("Packed, Backward, CPU CSR", B, x, y_exp_bwd, D_Dl1_exp, 2, BackwardSweep())
-        test_sym_result(
-            "Packed, Backward, CPU Threaded CSR",
-            C,
-            x,
-            y_exp_bwd,
-            D_Dl1_exp,
-            2,
-            BackwardSweep(),
-            PackedBufferCache(),
-            test_bwd_buffer_fn,
-        )
 
         # Symmetric sweep packed buffer tests
         test_sym_result(
@@ -235,17 +212,6 @@ end
             2,
             SymmetricSweep(),
         )
-        test_sym_result(
-            "Packed, Symmetric, CPU Threaded CSR",
-            C,
-            x,
-            y_exp_sym,
-            D_Dl1_exp,
-            2,
-            SymmetricSweep(),
-            PackedBufferCache(),
-            test_sym_buffer_fn,
-        )
 
         # MatrixViewCache tests
         # Forward sweep MatrixViewCache tests
@@ -262,16 +228,6 @@ end
         test_sym_result(
             "MatrixView, Forward, CPU CSR",
             B,
-            x,
-            y_exp_fwd,
-            D_Dl1_exp,
-            2,
-            ForwardSweep(),
-            MatrixViewCache(),
-        )
-        test_sym_result(
-            "MatrixView, Forward, CPU Threaded CSR",
-            C,
             x,
             y_exp_fwd,
             D_Dl1_exp,
@@ -301,16 +257,6 @@ end
             BackwardSweep(),
             MatrixViewCache(),
         )
-        test_sym_result(
-            "MatrixView, Backward, CPU Threaded CSR",
-            C,
-            x,
-            y_exp_bwd,
-            D_Dl1_exp,
-            2,
-            BackwardSweep(),
-            MatrixViewCache(),
-        )
 
         # Symmetric sweep MatrixViewCache tests
         test_sym_result(
@@ -326,16 +272,6 @@ end
         test_sym_result(
             "MatrixView, Symmetric, CPU CSR",
             B,
-            x,
-            y_exp_sym,
-            D_Dl1_exp,
-            2,
-            SymmetricSweep(),
-            MatrixViewCache(),
-        )
-        test_sym_result(
-            "MatrixView, Symmetric, CPU Threaded CSR",
-            C,
             x,
             y_exp_sym,
             D_Dl1_exp,
