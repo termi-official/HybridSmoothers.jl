@@ -13,7 +13,7 @@ include("devices.jl")
 include("utils.jl")
 
 # ----------------------------------------------------------------------------
-# Sparse matrix traits shared by smoothers and preconditioners.
+# Sparse matrix traits used by the preconditioners.
 # CSR/CSC are identical for symmetric matrices, so we carry a separate symmetry
 # trait that lets each backend pick its preferred access pattern.
 # ----------------------------------------------------------------------------
@@ -35,20 +35,11 @@ sparsemat_format_type(::Union{SparseMatrixCSR, ThreadedSparseMatrixCSR}) = CSRFo
 colvals(A::Union{SparseMatrixCSR, ThreadedSparseMatrixCSR}) = SparseMatricesCSR.getcolval(A)
 getrowptr(A::Union{SparseMatrixCSR, ThreadedSparseMatrixCSR}) = SparseMatricesCSR.getrowptr(A)
 
-# ----------------------------------------------------------------------------
-# Smoother abstraction (matches the AlgebraicMultigrid.jl convention:
-# a `Smoother` is callable as `(s)(A, x, b)` and updates `x` in-place toward
-# the solution of `Ax = b`).
-# ----------------------------------------------------------------------------
-abstract type Smoother end
-
 include("l1_gauss_seidel.jl")
-include("smoother.jl")
 
-export L1GSPrecBuilder, L1GaussSeidel
+export L1GSPrecBuilder
 export ForwardSweep, BackwardSweep, SymmetricSweep
 export PackedBufferCache, MatrixViewCache
-export Smoother, setup_smoother
 
 export AbstractDevice, AbstractCPUDevice, AbstractGPUDevice,
     SequentialCPUDevice, PolyesterDevice, CudaDevice,
