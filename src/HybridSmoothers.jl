@@ -6,10 +6,9 @@ using Adapt
 using LinearAlgebra
 using TimerOutputs: @timeit_debug
 import Base: \
+import KernelAbstractions as KA
 import KernelAbstractions: @kernel, @index, functional, CPU, synchronize
 import SparseArrays: getcolptr, getnzval
-
-include("devices.jl")
 
 # ----------------------------------------------------------------------------
 # Sparse matrix traits used by the preconditioners.
@@ -39,9 +38,5 @@ include("l1_gauss_seidel.jl")
 export L1GSPrecBuilder
 export ForwardSweep, BackwardSweep, SymmetricSweep
 export PackedBufferCache, MatrixViewCache
-
-export AbstractDevice, AbstractCPUDevice, AbstractGPUDevice,
-    SequentialCPUDevice, PolyesterDevice, CudaDevice,
-    default_backend, value_type, index_type
 
 end

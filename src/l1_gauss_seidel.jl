@@ -159,7 +159,8 @@ SIAM J. Sci. Comput., 33(5), 2864–2887.](@cite BakFalKolYan:2011:MSU)
 
 # Example
 ```julia
-builder = L1GSPrecBuilder(PolyesterDevice(4))
+import KernelAbstractions as KA
+builder = L1GSPrecBuilder(KA.CPU(); chunks = 4)
 N = 128 * 16
 A = spdiagm(0 => 2 * ones(N), -1 => -ones(N-1), 1 => -ones(N-1))
 partsize = 16
@@ -181,23 +182,67 @@ struct L1GSPreconditioner{Partitioning, SweepPlanType <: AbstractL1GSSweepPlan}
     sweep::SweepPlanType
 end
 
-"""
-    L1GSPrecBuilder(device::AbstractDevice)
-A builder for the L1 Gauss-Seidel preconditioner. This struct encapsulates the backend and provides a method to build the preconditioner.
-# Fields
-- `device::AbstractDevice`: The backend used for the preconditioner. More info [AbstractDevice](@ref).
-"""
-struct L1GSPrecBuilder{DeviceType <: AbstractDevice}
-    device::DeviceType
-    function L1GSPrecBuilder(device::AbstractDevice)
-        backend = default_backend(device)
-        if functional(backend)
-            return new{typeof(device)}(device)
-        else
-            error(" $backend is not functional, please check your backend.")
-        end
+abstract type DeviceConfig end
+
+struct CPUConfig{Ti <: Integer} <: DeviceConfig
+    chunks::Ti
+    function CPUConfig{Ti}(chunks::Ti) where {Ti <: Integer}
+        chunks > 0 || error("`chunks` must be greater than 0")
+        return new{Ti}(chunks)
     end
 end
+CPUConfig(chunks::Ti) where {Ti <: Integer} = CPUConfig{Ti}(chunks)
+
+struct GPUConfig{Ti <: Integer} <: DeviceConfig
+    threads::Ti
+    blocks::Ti
+    function GPUConfig{Ti}(threads::Ti, blocks::Ti) where {Ti <: Integer}
+        threads > 0 || error("`threads` must be greater than 0")
+        blocks > 0  || error("`blocks` must be greater than 0")
+        return new{Ti}(threads, blocks)
+    end
+end
+GPUConfig(threads::Ti, blocks::Ti) where {Ti <: Integer} = GPUConfig{Ti}(threads, blocks)
+GPUConfig(threads::Integer, blocks::Integer) = GPUConfig(promote(threads, blocks)...)
+GPUConfig(; threads::Integer, blocks::Integer) = GPUConfig(threads, blocks)
+
+"""
+    L1GSPrecBuilder(backend, device_config)
+A builder for the L1 Gauss-Seidel preconditioner. This struct encapsulates the backend and provides a method to build the preconditioner.
+# Fields
+- `backend::KA.Backend`: The backend used for the preconditioner.
+- `device_config::DeviceConfig`: Workgroup configuration ([`CPUConfig`](@ref) or [`GPUConfig`](@ref)).
+
+# Example
+```julia
+import KernelAbstractions as KA
+builder = L1GSPrecBuilder(KA.CPU(); chunks = 4) #CPU
+# builder = L1GSPrecBuilder(CUDABackend(); threads = 256, blocks = 20) #GPU
+```
+"""
+struct L1GSPrecBuilder{BackendType <: KA.Backend, ConfigType <: DeviceConfig}
+    backend::BackendType
+    device_config::ConfigType
+end
+
+function L1GSPrecBuilder(backend::KA.CPU, config::CPUConfig)
+    functional(backend) ||
+        error(" $backend is not functional, please check your backend.")
+    return L1GSPrecBuilder{typeof(backend), typeof(config)}(backend, config)
+end
+
+function L1GSPrecBuilder(backend::KA.GPU, config::GPUConfig)
+    functional(backend) ||
+        error(" $backend is not functional, please check your backend.")
+    return L1GSPrecBuilder{typeof(backend), typeof(config)}(backend, config)
+end
+
+# Sugar: kwargs that build the right DeviceConfig.
+L1GSPrecBuilder(backend::KA.CPU; chunks::Integer = 1) =
+    L1GSPrecBuilder(backend, CPUConfig(chunks))
+
+L1GSPrecBuilder(backend::KA.GPU; threads::Integer, blocks::Integer) =
+    L1GSPrecBuilder(backend, GPUConfig(threads, blocks))
 
 function (builder::L1GSPrecBuilder)(
     A::AbstractMatrix,
@@ -205,7 +250,7 @@ function (builder::L1GSPrecBuilder)(
     isSymA::Bool = false,
     η = 1.5,
     sweep::AbstractSweep = SymmetricSweep(),
-    cache_strategy::AbstractCacheStrategy = _choose_default_device_storage(builder.device),
+    cache_strategy::AbstractCacheStrategy = _choose_default_device_storage(builder.backend),
 ) where {Ti <: Integer}
     build_l1prec(builder, A, partsize, isSymA, η, sweep, cache_strategy)
 end
@@ -246,31 +291,29 @@ function build_l1prec(
 end
 
 function _blockpartitioning(
-    builder::L1GSPrecBuilder{<:AbstractCPUDevice},
+    builder::L1GSPrecBuilder{<:KA.CPU, <:CPUConfig},
     A::AbstractSparseMatrix,
     partsize::Ti,
 ) where {Ti <: Integer}
-    (; device) = builder
-    (; chunksize) = device
+    (; backend, device_config) = builder
+    (; chunks) = device_config
     nparts = convert(Ti, size(A, 1) / partsize |> ceil) #total number of partitions
-    nchunks = chunksize * nparts
-    return BlockPartitioning(partsize, nparts, nchunks, chunksize, default_backend(device))
+    nchunks = convert(Ti, chunks) * nparts
+    return BlockPartitioning(partsize, nparts, nchunks, convert(Ti, chunks), backend)
 end
 
 function _blockpartitioning(
-    builder::L1GSPrecBuilder{<:AbstractGPUDevice},
+    builder::L1GSPrecBuilder{<:KA.GPU, <:GPUConfig},
     A::AbstractSparseMatrix,
     partsize::Ti,
 ) where {Ti <: Integer}
-    (; device) = builder
-    (; blocks, threads) = device
-    (threads == 0 || threads === nothing) && error("`threads` must be set greater than 0")
-    (blocks == 0 || blocks === nothing) && error("`blocks`` must be set greater than 0")
-    nchunks = blocks # number of GPU blocks
+    (; backend, device_config) = builder
+    (; threads, blocks) = device_config
+    nchunks = convert(Ti, blocks) # number of GPU blocks
     nparts = convert(Ti, size(A, 1) / partsize |> ceil) #total number of partitions
     chunksize = convert(Ti, (nparts / nchunks) |> ceil) # number of partitions per chunk
     chunksize = chunksize <= threads ? chunksize : threads # number of threads per block
-    return BlockPartitioning(partsize, nparts, nchunks, chunksize, default_backend(device))
+    return BlockPartitioning(partsize, nparts, nchunks, chunksize, backend)
 end
 
 function LinearSolve.ldiv!(
@@ -456,8 +499,8 @@ function get_data(A::Symmetric{T, TA}) where {T, TA <: AbstractSparseMatrix}
 end
 
 
-_choose_default_device_storage(::AbstractDevice) = MatrixViewCache()
-_choose_default_device_storage(::AbstractGPUDevice) = PackedBufferCache()
+_choose_default_device_storage(::KA.Backend) = MatrixViewCache()
+_choose_default_device_storage(::KA.GPU) = PackedBufferCache()
 
 
 # Helper to create diagonal indices based on format and symmetry

@@ -6,7 +6,7 @@ using KernelAbstractions
 using MatrixDepot
 using HybridSmoothers, CUDA
 using LinearAlgebra: Symmetric
-import HybridSmoothers: CudaDevice
+import CUDA: CUDABackend
 
 ##########################################
 ## L1 Gauss Seidel Preconditioner - GPU ##
@@ -34,7 +34,7 @@ function test_sym_result(
         total_nthreads = 10
         for nblocks = 1:total_nblocks # testing for multiple `nblocks` and `nthreads` to check that the answer is independent of the config.
             for nthreads = 1:total_nthreads
-                builder = L1GSPrecBuilder(CudaDevice(nblocks, nthreads))
+                builder = L1GSPrecBuilder(CUDABackend(); threads = nthreads, blocks = nblocks)
                 P =
                     A isa Symmetric ?
                     builder(A, partsize; sweep = sweep, cache_strategy = cache_strategy) :
@@ -80,14 +80,14 @@ function test_l1gs_prec(
         @test isapprox(A * sol_unprec.u, b, rtol = 1e-1, atol = 1e-1)
 
         P = if A isa Symmetric
-            L1GSPrecBuilder(CudaDevice(nblocks, nthreads))(
+            L1GSPrecBuilder(CUDABackend(); threads = nthreads, blocks = nblocks)(
                 A,
                 partsize;
                 sweep = sweep,
                 cache_strategy = cache_strategy,
             )
         else
-            L1GSPrecBuilder(CudaDevice(nblocks, nthreads))(
+            L1GSPrecBuilder(CUDABackend(); threads = nthreads, blocks = nblocks)(
                 A,
                 partsize;
                 sweep = sweep,
@@ -274,7 +274,7 @@ end
             η = 2.0
             D_DL1_exp = Float64.([2, 2, 2, 2, 2, 2, 2, 2, 2])
             SLbuffer_exp = Float64.([-1, -1, -1, -1])
-            builder = L1GSPrecBuilder(CudaDevice(2, 2))
+            builder = L1GSPrecBuilder(CUDABackend(); threads = 2, blocks = 2)
             P = builder(A, 2; η = η, sweep = ForwardSweep(), cache_strategy = PackedBufferCache())
             @test Vector(P.sweep.op.D_DL1) ≈ D_DL1_exp
             @test Vector(P.sweep.op.L.SLbuffer) ≈ SLbuffer_exp
@@ -317,7 +317,7 @@ end
             SLbuffer_exp2 = Float64.([-1, -1, -1, -1])
             SUbuffer_exp2 = Float64.([-1, -1, -1, -1])
 
-            builder = L1GSPrecBuilder(CudaDevice(2, 2))
+            builder = L1GSPrecBuilder(CUDABackend(); threads = 2, blocks = 2)
 
             # Forward sweep with PackedBufferCache
             P = builder(A2, 2; sweep = ForwardSweep(), cache_strategy = PackedBufferCache())
@@ -346,7 +346,7 @@ end
             partsize = 3
             D_DL1_exp = Float64.([2, 2, 2, 2, 2, 2, 2, 2, 2])  # η=1.5: all rows satisfy a_ii >= η*dl1_ii
             SLbuffer_exp = Float64.([-1, 0, -1, -1, 0, -1, -1, 0, -1])
-            builder = L1GSPrecBuilder(CudaDevice(2, 2))
+            builder = L1GSPrecBuilder(CUDABackend(); threads = 2, blocks = 2)
             P = builder(
                 A,
                 partsize;

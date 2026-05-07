@@ -13,16 +13,13 @@ SparseMatricesCSR = "a0a7dd2c-ebf4-11e9-1f05-cf50bc540ca1"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [weakdeps]
-CUDA = "052768ef-5323-5732-b1bb-66c8b64840ba"
 GPUArrays = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
 
 [extensions]
 HybridSmoothersGPUArraysExt = "GPUArrays"
-HybridSmoothersCUDAExt = ["CUDA", "GPUArrays"]
 
 [compat]
 Adapt = "4"
-CUDA = ">=5.9.6"
 GPUArrays = "11.4.0"
 KernelAbstractions = "0.9.34"
 LinearSolve = "3"

@@ -32,7 +32,7 @@ function test_sym_result(
     @testset "$testname Symmetric" begin
         total_ncores = 8 # Assuming 8 cores for testing
         for ncores = 1:total_ncores # testing for multiple cores to check that the answer is independent of the number of cores
-            builder = L1GSPrecBuilder(PolyesterDevice(ncores))
+            builder = L1GSPrecBuilder(KernelAbstractions.CPU(); chunks = ncores)
             P =
                 A isa Symmetric ?
                 builder(A, partsize; sweep = sweep, cache_strategy = cache_strategy) :
@@ -71,14 +71,14 @@ function test_l1gs_prec(
         @test isapprox(A * sol_unprec.u, b, rtol = 1e-1, atol = 1e-1)
         TimerOutputs.reset_timer!()
         P = if A isa Symmetric
-            L1GSPrecBuilder(PolyesterDevice(ncores))(
+            L1GSPrecBuilder(KernelAbstractions.CPU(); chunks = ncores)(
                 A,
                 partsize;
                 sweep = sweep,
                 cache_strategy = cache_strategy,
             )
         else
-            L1GSPrecBuilder(PolyesterDevice(ncores))(
+            L1GSPrecBuilder(KernelAbstractions.CPU(); chunks = ncores)(
                 A,
                 partsize;
                 sweep = sweep,
@@ -288,7 +288,7 @@ end
             η = 2.0
             D_Dl1_exp = Float64.([2, 2, 2, 2, 2, 2, 2, 2, 2])
             SLbuffer_exp = Float64.([-1, -1, -1, -1])
-            builder = L1GSPrecBuilder(PolyesterDevice(2))
+            builder = L1GSPrecBuilder(KernelAbstractions.CPU(); chunks = 2)
             P = builder(A, 2; η = η, sweep = ForwardSweep(), cache_strategy = PackedBufferCache())
             @test P.sweep.op.D_DL1 ≈ D_Dl1_exp
             @test P.sweep.op.L.SLbuffer ≈ SLbuffer_exp
@@ -332,7 +332,7 @@ end
             SLbuffer_exp2 = Float64.([-1, -1, -1, -1])
             SUbuffer_exp2 = Float64.([-1, -1, -1, -1])
 
-            builder = L1GSPrecBuilder(PolyesterDevice(2))
+            builder = L1GSPrecBuilder(KernelAbstractions.CPU(); chunks = 2)
 
             # Forward sweep with PackedBufferCache
             P = builder(A2, 2; sweep = ForwardSweep(), cache_strategy = PackedBufferCache())
@@ -362,7 +362,7 @@ end
             ncores = 2
             D_Dl1_exp = Float64.([2, 2, 2, 2, 2, 2, 2, 2, 2])  # η=1.5: all rows satisfy a_ii >= η*dl1_ii
             SLbuffer_exp = Float64.([-1, 0, -1, -1, 0, -1, -1, 0, -1])
-            builder = L1GSPrecBuilder(PolyesterDevice(ncores))
+            builder = L1GSPrecBuilder(KernelAbstractions.CPU(); chunks = ncores)
             P = builder(A, partsize; sweep = ForwardSweep(), cache_strategy = PackedBufferCache())
             @test P.sweep.op.D_DL1 ≈ D_Dl1_exp
             @test P.sweep.op.L.SLbuffer ≈ SLbuffer_exp
@@ -624,7 +624,7 @@ end
             U = triu(A, 1)   # strict upper triangular
 
             # Build L1GS preconditioners with partsize=N (full matrix, standard GS)
-            builder = L1GSPrecBuilder(PolyesterDevice(1))
+            builder = L1GSPrecBuilder(KernelAbstractions.CPU())
             P_fwd = builder(
                 A,
                 N;
