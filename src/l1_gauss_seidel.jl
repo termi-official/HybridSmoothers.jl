@@ -182,8 +182,19 @@ struct L1GSPreconditioner{Partitioning, SweepPlanType <: AbstractL1GSSweepPlan}
     sweep::SweepPlanType
 end
 
+"""
+    DeviceConfig
+
+Kernel launch configuration.
+See [`CPUConfig`](@ref), [`GPUConfig`](@ref), and [`L1GSPrecBuilder`](@ref) for an example.
+"""
 abstract type DeviceConfig end
 
+"""
+    CPUConfig(chunks)
+
+Kernel launch configuration for CPU backends.
+"""
 struct CPUConfig{Ti <: Integer} <: DeviceConfig
     chunks::Ti
     function CPUConfig{Ti}(chunks::Ti) where {Ti <: Integer}
@@ -193,6 +204,12 @@ struct CPUConfig{Ti <: Integer} <: DeviceConfig
 end
 CPUConfig(chunks::Ti) where {Ti <: Integer} = CPUConfig{Ti}(chunks)
 
+"""
+    GPUConfig(threads, blocks)
+    GPUConfig(; threads, blocks)
+
+Kernel launch configuration for GPU backends.
+"""
 struct GPUConfig{Ti <: Integer} <: DeviceConfig
     threads::Ti
     blocks::Ti
