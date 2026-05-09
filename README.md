@@ -3,41 +3,33 @@
 Smoothers and preconditioners for sparse linear systems that run on heterogeneous backends via
 [KernelAbstractions.jl](https://github.com/JuliaGPU/KernelAbstractions.jl).
 
-Currently implemented:
+## Currently implemented
 
-- **L1 Gauss–Seidel preconditioner** (`L1GSPrecBuilder`) — partitioned, parallel-friendly Gauss–Seidel.
-  Runs on CPU and GPU (CUDA, AMDGPU).
+- L1 Gauss–Seidel preconditioner (`L1GSPrecBuilder`)
 
-## Quick start (CPU)
+## L1 Gauss–Seidel preconditioner (`L1GSPrecBuilder`)
+
+Partitioned, parallel-friendly Gauss–Seidel. Runs on CPU and GPU (CUDA, AMDGPU).
+
+### Quick start
 
 ```julia
-using HybridSmoothers, LinearSolve, SparseArrays
+using HybridSmoothers, LinearSolve, SparseArrays, CUDA  # or AMDGPU
 import KernelAbstractions as KA
 
 N = 128 * 16
 A = spdiagm(0 => 2 * ones(N), -1 => -ones(N-1), 1 => -ones(N-1))
 b = ones(N)
 
-builder = L1GSPrecBuilder(KA.CPU(), CPUConfig(4))
-# or: L1GSPrecBuilder(KA.CPU(); chunks = 4)
+builder = L1GSPrecBuilder(CUDABackend(); threads = 256, blocks = 20) # ROCBackend() for AMDGPU
+# CPU: builder = L1GSPrecBuilder(KA.CPU(); chunks = 4)
+
 P = builder(A, 16; isSymA = true, sweep = SymmetricSweep())
 
 sol = solve(LinearProblem(A, b), KrylovJL_CG(); Pl = P)
 ```
 
-## GPU
-
-```julia
-using CUDA  # or AMDGPU
-builder = L1GSPrecBuilder(CUDABackend(), GPUConfig(256, 20))
-# or: L1GSPrecBuilder(CUDABackend(); threads = 256, blocks = 20)
-P = builder(A, 16; isSymA = true, sweep = SymmetricSweep(),
-            cache_strategy = PackedBufferCache())
-```
-
-See `?L1GSPrecBuilder` for the full set of options.
-
-## Notes
+### Notes
 
 > [!NOTE]
 > **Sweep.** `ForwardSweep` uses the lower triangular part (`M = D + L`),
@@ -56,7 +48,7 @@ See `?L1GSPrecBuilder` for the full set of options.
 > the non-symmetric path is used and a `DiagonalIndices` table is built so the
 > kernel can locate diagonal entries in CSC storage.
 
-## Reference
+### Reference
 
 Baker, A. H., Falgout, R. D., Kolev, T. V., & Yang, U. M. (2011).
 *Multigrid Smoothers for Ultraparallel Computing*, SIAM J. Sci. Comput. 33(5), 2864–2887.
