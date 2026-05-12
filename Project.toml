@@ -13,15 +13,12 @@ SparseMatricesCSR = "a0a7dd2c-ebf4-11e9-1f05-cf50bc540ca1"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [weakdeps]
-AMDGPU = "21141c5a-9bdb-4563-92ae-f87d6854732e"
 GPUArrays = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
 
 [extensions]
-HybridSmoothersAMDGPUExt = "AMDGPU"
 HybridSmoothersGPUArraysExt = "GPUArrays"
 
 [compat]
-AMDGPU = ">=2.3"
 Adapt = "4"
 GPUArrays = "11.4.0"
 KernelAbstractions = "0.9.34"
