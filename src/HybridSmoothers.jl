@@ -1,14 +1,16 @@
 module HybridSmoothers
 
-using SparseArrays, SparseMatricesCSR
-using LinearSolve
-using Adapt
-using LinearAlgebra
+using SparseArrays:
+    SparseArrays, SparseMatrixCSC, AbstractSparseMatrix,
+    spdiagm, rowvals, getcolptr, getnzval
+using SparseMatricesCSR: SparseMatricesCSR, SparseMatrixCSR
+using LinearSolve: LinearSolve
+using Adapt: Adapt, adapt
+using LinearAlgebra: LinearAlgebra, Symmetric
 using TimerOutputs: @timeit_debug
 import Base: \
 import KernelAbstractions as KA
 import KernelAbstractions: @kernel, @index, functional, CPU, synchronize
-import SparseArrays: getcolptr, getnzval
 
 # ----------------------------------------------------------------------------
 # Sparse matrix traits used by the preconditioners.
