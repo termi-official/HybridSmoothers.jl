@@ -1,0 +1,29 @@
+# Julia
+Manifest.toml
+*.jl.cov
+*.jl.*.cov
+*.jl.mem
+deps/deps.jl
+deps/build.log
+deps/usr/
+deps/src/
+deps/build/
+.julia/
+
+# Documentation builds
+docs/build/
+docs/site/
+
+# Editors / IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Direct dependencies dev'd in via LocalPreferences.toml
+LocalPreferences.toml
