@@ -13,9 +13,11 @@ SparseMatricesCSR = "a0a7dd2c-ebf4-11e9-1f05-cf50bc540ca1"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [weakdeps]
+AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
 GPUArrays = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
 
 [extensions]
+HybridSmoothersAMGExt = "AlgebraicMultigrid"
 HybridSmoothersGPUArraysExt = "GPUArrays"
 
 [compat]
