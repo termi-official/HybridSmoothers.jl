@@ -315,8 +315,9 @@ function _blockpartitioning(
     (; backend, device_config) = builder
     (; chunks) = device_config
     nparts = convert(Ti, size(A, 1) / partsize |> ceil) #total number of partitions
-    nchunks = convert(Ti, chunks) * nparts
-    return BlockPartitioning(partsize, nparts, nchunks, convert(Ti, chunks), backend)
+    nchunks = convert(Ti, chunks)
+    chunksize = convert(Ti, cld(nparts, nchunks))
+    return BlockPartitioning(partsize, nparts, nchunks, chunksize, backend)
 end
 
 function _blockpartitioning(
@@ -818,7 +819,7 @@ end
 
 struct DiagonalPartsIterator{Ti}
     size_A::Ti
-    partsize::Ti
+    nominal_partsize::Ti # full partition size
     nparts::Ti
     nchunks::Ti # number of CPU cores or GPU blocks
     chunksize::Ti # number of threads per block
@@ -827,7 +828,7 @@ end
 
 struct DiagonalPartCache{Ti}
     k::Ti # partition index
-    partsize::Ti # partition size
+    actual_partsize::Ti # size of this partition (may be < nominal for the last one)
     start_idx::Ti # start index of the partition
     end_idx::Ti # end index of the partition
 end
@@ -854,9 +855,9 @@ function _makecache(iterator::DiagonalPartsIterator, k::Ti) where {Ti <: Integer
     #Ωⁱₒ := {j ∉ Ωₖ : i ∈ Ωₖ} off-partition column values
     # bₖᵢ := Aᵢᵢ
     # dₖᵢ := ∑_{j ∈ Ωⁱₒ} |Aᵢⱼ|
-    (; size_A, partsize) = iterator
-    part_start_idx = (k - convert(Ti, 1)) * partsize + convert(Ti, 1)
-    part_end_idx = min(part_start_idx + partsize - convert(Ti, 1), size_A)
+    (; size_A, nominal_partsize) = iterator
+    part_start_idx = (k - convert(Ti, 1)) * nominal_partsize + convert(Ti, 1)
+    part_end_idx = min(part_start_idx + nominal_partsize - convert(Ti, 1), size_A)
 
     #b,d = diag_offpart_func(getcolptr(A), rowvals(A), getnzval(A), idx, part_start_idx, part_end_idx)
     actual_partsize = part_end_idx - part_start_idx + convert(Ti, 1)
@@ -919,7 +920,7 @@ end
         chunksize,
         convert(Ti, initial_partition_idx),
     )
-        (; k, partsize, start_idx, end_idx) = part
+        (; start_idx, end_idx) = part
         for i = start_idx:end_idx
             a_ii, dl1_ii = _diag_offpart(symA, format_A, A, diag, i, start_idx, end_idx)
             TF = eltype(D_Dl1)
@@ -955,7 +956,7 @@ end
         chunksize,
         convert(Ti, initial_partition_idx),
     )
-        (; k, partsize, start_idx, end_idx) = part
+        (; k, actual_partsize, start_idx, end_idx) = part
 
         # Compute D_Dl1
         for i = start_idx:end_idx
@@ -966,7 +967,8 @@ end
         end
 
         # Pack triangular elements - dispatches based on cache type
-        _pack_strict_triangular!(cache, symA, format_A, A, start_idx, end_idx, partsize, k)
+        # `partsize` here is the kernel arg = nominal partsize
+        _pack_strict_triangular!(cache, symA, format_A, A, start_idx, end_idx, partsize, actual_partsize, k)
     end
 end
 
@@ -990,9 +992,10 @@ end
         chunksize,
         convert(Ti, initial_partition_idx),
     )
-        (; k, partsize, start_idx, end_idx) = part
+        (; k, actual_partsize, start_idx, end_idx) = part
+        # `partsize` here is the kernel arg = nominal partsize
         @inbounds for i in sweep_range(cache, start_idx, end_idx)
-            acc = _accumulate_from_cache(cache, y, i, k, partsize, start_idx, end_idx)
+            acc = _accumulate_from_cache(cache, y, i, k, partsize, actual_partsize, start_idx, end_idx)
             y[i] = (y[i] - acc) / D_Dl1[i]
         end
     end
@@ -1156,10 +1159,11 @@ function _pack_strict_lower_rowwise!(
     nzVal,
     start_idx::Ti,
     end_idx::Ti,
-    partsize::Ti,
+    nominal_partsize::Ti,
+    actual_partsize::Ti,
     k::Ti,
 ) where {Ti <: Integer}
-    block_stride = (partsize * (partsize - 1)) ÷ 2
+    block_stride = (nominal_partsize * (nominal_partsize - 1)) ÷ 2
     block_offset = (k - 1) * block_stride
 
     for i = start_idx:end_idx
@@ -1186,14 +1190,15 @@ function _pack_strict_triangular!(
     A,
     start_idx::Ti,
     end_idx::Ti,
-    partsize::Ti,
+    nominal_partsize::Ti,
+    actual_partsize::Ti,
     k::Ti,
 ) where {Ti <: Integer}
     (; SLbuffer) = cache
     colPtr = getcolptr(A)
     rowVal = rowvals(A)
     nzVal = getnzval(A)
-    block_stride = (partsize * (partsize - 1)) ÷ 2
+    block_stride = (nominal_partsize * (nominal_partsize - 1)) ÷ 2
     block_offset = (k - 1) * block_stride
 
     # Scan columns in partition (except last column which has no lower elements)
@@ -1232,7 +1237,8 @@ function _pack_strict_triangular!(
     A,
     start_idx::Ti,
     end_idx::Ti,
-    partsize::Ti,
+    nominal_partsize::Ti,
+    actual_partsize::Ti,
     k::Ti,
 ) where {Ti <: Integer}
     # Symmetric CSC: row i = column i, so use row-wise access
@@ -1243,7 +1249,8 @@ function _pack_strict_triangular!(
         getnzval(A),
         start_idx,
         end_idx,
-        partsize,
+        nominal_partsize,
+        actual_partsize,
         k,
     )
 end
@@ -1255,7 +1262,8 @@ function _pack_strict_triangular!(
     A,
     start_idx::Ti,
     end_idx::Ti,
-    partsize::Ti,
+    nominal_partsize::Ti,
+    actual_partsize::Ti,
     k::Ti,
 ) where {Ti <: Integer}
     # CSR: direct row-wise access
@@ -1266,7 +1274,8 @@ function _pack_strict_triangular!(
         getnzval(A),
         start_idx,
         end_idx,
-        partsize,
+        nominal_partsize,
+        actual_partsize,
         k,
     )
 end
@@ -1282,17 +1291,18 @@ function _pack_strict_upper_rowwise!(
     nzVal,
     start_idx::Ti,
     end_idx::Ti,
-    partsize::Ti,
+    nominal_partsize::Ti,
+    actual_partsize::Ti,
     k::Ti,
 ) where {Ti <: Integer}
-    block_stride = (partsize * (partsize - 1)) ÷ 2
+    block_stride = (nominal_partsize * (nominal_partsize - 1)) ÷ 2
     block_offset = (k - 1) * block_stride
 
     for i = start_idx:end_idx
         local_i = i - start_idx + 1
         # Row i starts after: sum of upper elements in rows 1..(local_i-1)
-        # = sum_{r=1}^{local_i-1} (partsize - r) = (local_i-1)*partsize - (local_i-1)*local_i/2
-        row_start = (local_i - 1) * partsize - ((local_i - 1) * local_i) ÷ 2
+        # = sum_{r=1}^{local_i-1} (actual_partsize - r) = (local_i-1)*actual_partsize - (local_i-1)*local_i/2
+        row_start = (local_i - 1) * actual_partsize - ((local_i - 1) * local_i) ÷ 2
 
         # Scan row i (or column i for symmetric CSC)
         for p = indPtr[i]:(indPtr[i+1]-1)
@@ -1316,7 +1326,8 @@ function _pack_strict_triangular!(
     A,
     start_idx::Ti,
     end_idx::Ti,
-    partsize::Ti,
+    nominal_partsize::Ti,
+    actual_partsize::Ti,
     k::Ti,
 ) where {Ti <: Integer}
     (; SUbuffer) = cache
@@ -1324,7 +1335,7 @@ function _pack_strict_triangular!(
     rowVal = rowvals(A)
     nzVal = getnzval(A)
 
-    block_stride = (partsize * (partsize - 1)) ÷ 2
+    block_stride = (nominal_partsize * (nominal_partsize - 1)) ÷ 2
     block_offset = (k - 1) * block_stride
 
     # Process each column j (columns with j > start_idx have upper elements)
@@ -1348,13 +1359,8 @@ function _pack_strict_triangular!(
                 local_i = i - start_idx + 1
 
                 # Calculate position in row-wise packed upper triangular storage
-                # Row i starts after: sum of upper elements in rows 1..(i-1)
-                # = sum_{r=1}^{i-1} (partsize - r)
-                # = (i-1)*partsize - (i-1)*i/2
-                # = (i-1)*(partsize - i/2)
-                # But we use local indices, so:
-                # row_start = sum_{r=1}^{local_i-1} (partsize - r)
-                row_start = (local_i - 1) * partsize - ((local_i - 1) * local_i) ÷ 2
+                # Within-partition row stride uses actual_partsize (the slot's true row width).
+                row_start = (local_i - 1) * actual_partsize - ((local_i - 1) * local_i) ÷ 2
 
                 # Within row i, element at column col is at position (local_j - local_i)
                 col_offset = local_j - local_i
@@ -1376,7 +1382,8 @@ function _pack_strict_triangular!(
     A,
     start_idx::Ti,
     end_idx::Ti,
-    partsize::Ti,
+    nominal_partsize::Ti,
+    actual_partsize::Ti,
     k::Ti,
 ) where {Ti <: Integer}
     # Symmetric CSC: row i = column i, so use row-wise access
@@ -1387,7 +1394,8 @@ function _pack_strict_triangular!(
         getnzval(A),
         start_idx,
         end_idx,
-        partsize,
+        nominal_partsize,
+        actual_partsize,
         k,
     )
 end
@@ -1399,7 +1407,8 @@ function _pack_strict_triangular!(
     A,
     start_idx::Ti,
     end_idx::Ti,
-    partsize::Ti,
+    nominal_partsize::Ti,
+    actual_partsize::Ti,
     k::Ti,
 ) where {Ti <: Integer}
     # CSR: direct row-wise access
@@ -1410,13 +1419,14 @@ function _pack_strict_triangular!(
         getnzval(A),
         start_idx,
         end_idx,
-        partsize,
+        nominal_partsize,
+        actual_partsize,
         k,
     )
 end
 
 
-_accumulate_from_cache(cache::BlockStrictLowerView, y, i, k, partsize, start_idx, end_idx) =
+_accumulate_from_cache(cache::BlockStrictLowerView, y, i, k, nominal_partsize, actual_partsize, start_idx, end_idx) =
     _accumulate_lower_from_matrix(
         cache.A,
         cache.frmt,
@@ -1428,7 +1438,7 @@ _accumulate_from_cache(cache::BlockStrictLowerView, y, i, k, partsize, start_idx
         cache.symA,
     )
 
-_accumulate_from_cache(cache::BlockStrictUpperView, y, i, k, partsize, start_idx, end_idx) =
+_accumulate_from_cache(cache::BlockStrictUpperView, y, i, k, nominal_partsize, actual_partsize, start_idx, end_idx) =
     _accumulate_upper_from_matrix(
         cache.A,
         cache.frmt,
@@ -1441,9 +1451,9 @@ _accumulate_from_cache(cache::BlockStrictUpperView, y, i, k, partsize, start_idx
     )
 
 # PackedBuffer caches - use k and partsize to compute buffer offsets
-function _accumulate_from_cache(cache::PackedStrictLower, y, i, k, partsize, start_idx, end_idx)
+function _accumulate_from_cache(cache::PackedStrictLower, y, i, k, nominal_partsize, actual_partsize, start_idx, end_idx)
     (; SLbuffer) = cache
-    block_stride = (partsize * (partsize - 1)) ÷ 2
+    block_stride = (nominal_partsize * (nominal_partsize - 1)) ÷ 2
     block_offset = (k - 1) * block_stride
 
     local_i = i - start_idx + 1
@@ -1458,19 +1468,18 @@ function _accumulate_from_cache(cache::PackedStrictLower, y, i, k, partsize, sta
     return acc
 end
 
-function _accumulate_from_cache(cache::PackedStrictUpper, y, i, k, partsize, start_idx, end_idx)
+function _accumulate_from_cache(cache::PackedStrictUpper, y, i, k, nominal_partsize, actual_partsize, start_idx, end_idx)
     (; SUbuffer) = cache
-    block_stride = (partsize * (partsize - 1)) ÷ 2
+    block_stride = (nominal_partsize * (nominal_partsize - 1)) ÷ 2
     block_offset = (k - 1) * block_stride
 
     local_i = i - start_idx + 1
-    # Row i starts after: sum of upper elements in rows 1..(local_i-1)
-    # = sum_{r=1}^{local_i-1} (partsize - r) = (local_i-1)*partsize - (local_i-1)*local_i/2
-    row_start = (local_i - 1) * partsize - ((local_i - 1) * local_i) ÷ 2
+    # Within-partition row stride uses actual_partsize (the slot's true row width).
+    row_start = (local_i - 1) * actual_partsize - ((local_i - 1) * local_i) ÷ 2
 
     acc = zero(eltype(y))
-    # Number of upper elements in row i = partsize - local_i
-    num_upper = partsize - local_i
+    # Number of upper elements in row i = actual_partsize - local_i
+    num_upper = actual_partsize - local_i
     @inbounds for offset = 1:num_upper
         gj = i + offset
         if gj > end_idx
