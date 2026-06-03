@@ -1,6 +1,8 @@
 [deps]
 AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
+BenchmarkTools = "6e4b80f9-dd63-53aa-95a3-0cdb28fa8baf"
 HybridSmoothers = "da817a5f-7d49-401a-84b6-75d77c2330d5"
+KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 
 [sources]
 HybridSmoothers = {path = ".."}
