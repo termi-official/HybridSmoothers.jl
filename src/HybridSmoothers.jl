@@ -6,7 +6,7 @@ using SparseArrays:
 using SparseMatricesCSR: SparseMatricesCSR, SparseMatrixCSR
 using LinearSolve: LinearSolve
 using Adapt: Adapt, adapt
-using LinearAlgebra: LinearAlgebra, Symmetric
+using LinearAlgebra: LinearAlgebra, Symmetric, mul!, norm
 using TimerOutputs: @timeit_debug
 import Base: \
 import KernelAbstractions as KA
@@ -36,9 +36,11 @@ colvals(A::SparseMatrixCSR) = SparseMatricesCSR.getcolval(A)
 getrowptr(A::SparseMatrixCSR) = SparseMatricesCSR.getrowptr(A)
 
 include("l1_gauss_seidel.jl")
+include("chebyshev.jl")
 
 export L1GSPrecBuilder
 export ForwardSweep, BackwardSweep, SymmetricSweep
 export PackedBufferCache, MatrixViewCache
+export ChebyshevFourth, ChebyshevFirst
 
 end
