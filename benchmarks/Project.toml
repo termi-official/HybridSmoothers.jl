@@ -1,0 +1,6 @@
+[deps]
+AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
+HybridSmoothers = "da817a5f-7d49-401a-84b6-75d77c2330d5"
+
+[sources]
+HybridSmoothers = {path = ".."}
