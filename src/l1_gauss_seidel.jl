@@ -296,15 +296,11 @@ function (builder::L1GSPrecBuilder)(
 end
 
 """
-    (builder::L1GSPrecBuilder)(A::Symmetric, partsize=_default_partsize(builder.device_config);
-                              η=1.5,
-                              sweep=SymmetricSweep(),
-                              cache_strategy=_choose_default_device_storage(builder.backend))
+    (builder::L1GSPrecBuilder)(A::Symmetric, partsize; kwargs...)
 
-Specialization for `Symmetric`-wrapped sparse matrices — assumes symmetry (no `isSymA`
-keyword) and uses the cheaper symmetric assembly path. Keyword arguments and
-defaults are identical to the generic method above; see [`L1GSPreconditioner`](@ref)
-for the algorithm.
+Special dispatch for `Symmetric` type matrices. See the generic
+`(builder::L1GSPrecBuilder)(A::AbstractMatrix, partsize; kwargs...)` method above
+and [`L1GSPreconditioner`](@ref) for details.
 """
 function (builder::L1GSPrecBuilder)(
     A::Symmetric,
