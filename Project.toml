@@ -1,6 +1,6 @@
 name = "HybridSmoothers"
 uuid = "da817a5f-7d49-401a-84b6-75d77c2330d5"
-version = "0.1.0"
+version = "0.1.1"
 authors = ["Abdelrahman F. Abdelrahman and Dennis Ogiermann <termi-official@users.noreply.github.com>"]
 
 [deps]
