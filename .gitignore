@@ -27,3 +27,8 @@ Thumbs.db
 
 # Direct dependencies dev'd in via LocalPreferences.toml
 LocalPreferences.toml
+
+
+# AI stuff
+*.claude
+*.json

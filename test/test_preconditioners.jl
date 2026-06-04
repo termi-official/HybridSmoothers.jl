@@ -1,4 +1,3 @@
-using HybridSmoothers
 using MatrixDepot, LinearSolve, SparseArrays, SparseMatricesCSR
 using KernelAbstractions
 using TimerOutputs
@@ -380,28 +379,32 @@ end
                 A,
                 b,
                 ForwardSweep(),
-                PackedBufferCache(),
+                PackedBufferCache();
+                partsize = 10,
             )
             test_l1gs_prec(
                 "MatrixView, ForwardSweep HB/sherman5",
                 A,
                 b,
                 ForwardSweep(),
-                MatrixViewCache(),
+                MatrixViewCache();
+                partsize = 10,
             )
             test_l1gs_prec(
                 "PackedBuffer, BackwardSweep HB/sherman5",
                 A,
                 b,
                 BackwardSweep(),
-                PackedBufferCache(),
+                PackedBufferCache();
+                partsize = 10,
             )
             test_l1gs_prec(
                 "MatrixView, BackwardSweep HB/sherman5",
                 A,
                 b,
                 BackwardSweep(),
-                MatrixViewCache(),
+                MatrixViewCache();
+                partsize = 10,
             )
         end
 
@@ -412,6 +415,7 @@ end
                 A = matrixdepot("wathen", 120)
                 b = ones(size(A, 1))
 
+                # Forward/Backward sweeps yield a non-symmetric preconditioner; use GMRES, not CG.
                 test_l1gs_prec(
                     "PackedBuffer, ForwardSweep wathen",
                     A,
@@ -420,7 +424,7 @@ end
                     PackedBufferCache();
                     isSymA = true,
                     partsize = 10,
-                    solver = KrylovJL_CG(),
+                    solver = KrylovJL_GMRES(),
                 )
                 test_l1gs_prec(
                     "MatrixView,  ForwardSweep wathen",
@@ -430,7 +434,7 @@ end
                     MatrixViewCache();
                     isSymA = true,
                     partsize = 10,
-                    solver = KrylovJL_CG(),
+                    solver = KrylovJL_GMRES(),
                 )
 
                 test_l1gs_prec(
@@ -441,7 +445,7 @@ end
                     PackedBufferCache();
                     isSymA = true,
                     partsize = 10,
-                    solver = KrylovJL_CG(),
+                    solver = KrylovJL_GMRES(),
                 )
                 test_l1gs_prec(
                     "MatrixView,  BackwardSweep wathen",
@@ -451,7 +455,7 @@ end
                     MatrixViewCache();
                     isSymA = true,
                     partsize = 10,
-                    solver = KrylovJL_CG(),
+                    solver = KrylovJL_GMRES(),
                 )
 
                 test_l1gs_prec(
@@ -476,20 +480,22 @@ end
                 )
             end
 
-            @testset "HB/bcsstk18 (Symmetric type)" begin
-                md = mdopen("HB/bcsstk10")
+            # Pothen/bodyy6: 19366×19366 Symmetric{Float64, SparseMatrixCSC{Float64, Int64}}
+            @testset "Pothen/bodyy6 (Symmetric type)" begin
+                md = mdopen("Pothen/bodyy6")
                 A = md.A
                 b = ones(size(A, 1))
 
                 test_l1gs_prec(
-                    "MatrixViewCache, ForwardSweep bcsstk10",
+                    "MatrixViewCache, ForwardSweep bodyy6",
                     A,
                     b,
                     ForwardSweep(),
                     MatrixViewCache();
+                    partsize = 10,
                 )
                 test_l1gs_prec(
-                    "PackedBufferCache, ForwardSweep bcsstk10",
+                    "PackedBufferCache, ForwardSweep bodyy6",
                     A,
                     b,
                     ForwardSweep(),
@@ -498,14 +504,15 @@ end
                 )
 
                 test_l1gs_prec(
-                    "MatrixViewCache, BackwardSweep bcsstk10",
+                    "MatrixViewCache, BackwardSweep bodyy6",
                     A,
                     b,
                     BackwardSweep(),
                     MatrixViewCache();
+                    partsize = 10,
                 )
                 test_l1gs_prec(
-                    "PackedBufferCache, BackwardSweep bcsstk10",
+                    "PackedBufferCache, BackwardSweep bodyy6",
                     A,
                     b,
                     BackwardSweep(),
@@ -514,14 +521,15 @@ end
                 )
 
                 test_l1gs_prec(
-                    "MatrixViewCache, SymmetricSweep bcsstk10",
+                    "MatrixViewCache, SymmetricSweep bodyy6",
                     A,
                     b,
                     SymmetricSweep(),
                     MatrixViewCache();
+                    partsize = 10,
                 )
                 test_l1gs_prec(
-                    "PackedBufferCache, SymmetricSweep bcsstk10",
+                    "PackedBufferCache, SymmetricSweep bodyy6",
                     A,
                     b,
                     SymmetricSweep(),
