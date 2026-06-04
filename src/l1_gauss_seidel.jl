@@ -255,30 +255,64 @@ function L1GSPrecBuilder(backend::KA.GPU, config::GPUConfig)
 end
 
 # Sugar: kwargs that build the right DeviceConfig.
-L1GSPrecBuilder(backend::KA.CPU; chunks::Integer = 1) =
+L1GSPrecBuilder(backend::KA.CPU; chunks::Integer = Threads.nthreads()) =
     L1GSPrecBuilder(backend, CPUConfig(chunks))
 
 L1GSPrecBuilder(backend::KA.GPU; threads::Integer, blocks::Integer) =
     L1GSPrecBuilder(backend, GPUConfig(threads, blocks))
 
+# Default partsize derived from device_config: `chunks` on CPU, `blocks` on GPU.
+_default_partsize(cfg::CPUConfig) = cfg.chunks
+_default_partsize(cfg::GPUConfig) = cfg.blocks
+
+"""
+    (builder::L1GSPrecBuilder)(A::AbstractMatrix, partsize=_default_partsize(builder.device_config);
+                              isSymA=false, η=1.5,
+                              sweep=SymmetricSweep(),
+                              cache_strategy=_choose_default_device_storage(builder.backend))
+
+Build an [`L1GSPreconditioner`](@ref) for the sparse matrix `A`.
+
+# Arguments
+- `A`: System matrix.
+- `partsize`: Size of each diagonal block. Defaults to `chunks` (CPU) or `blocks` (GPU).
+
+# Keyword arguments
+- `isSymA`: Set `true` to assume `A` is symmetric and `A` is not `Symmetric` type.
+- `η = 1.5`: Diagonal-dominance threshold for the L1 correction (see [`L1GSPreconditioner`](@ref)).
+- `sweep`: [`ForwardSweep`](@ref), [`BackwardSweep`](@ref), or [`SymmetricSweep`](@ref).
+- `cache_strategy`: [`MatrixViewCache`](@ref) or [`PackedBufferCache`](@ref).
+
+"""
 function (builder::L1GSPrecBuilder)(
     A::AbstractMatrix,
-    partsize::Ti;
+    partsize::Integer = _default_partsize(builder.device_config);
     isSymA::Bool = false,
     η = 1.5,
     sweep::AbstractSweep = SymmetricSweep(),
     cache_strategy::AbstractCacheStrategy = _choose_default_device_storage(builder.backend),
-) where {Ti <: Integer}
+)
     build_l1prec(builder, A, partsize, isSymA, η, sweep, cache_strategy)
 end
 
+"""
+    (builder::L1GSPrecBuilder)(A::Symmetric, partsize=_default_partsize(builder.device_config);
+                              η=1.5,
+                              sweep=SymmetricSweep(),
+                              cache_strategy=_choose_default_device_storage(builder.backend))
+
+Specialization for `Symmetric`-wrapped sparse matrices — assumes symmetry (no `isSymA`
+keyword) and uses the cheaper symmetric assembly path. Keyword arguments and
+defaults are identical to the generic method above; see [`L1GSPreconditioner`](@ref)
+for the algorithm.
+"""
 function (builder::L1GSPrecBuilder)(
     A::Symmetric,
-    partsize::Ti;
+    partsize::Integer = _default_partsize(builder.device_config);
     η = 1.5,
     sweep::AbstractSweep = SymmetricSweep(),
-    cache_strategy::AbstractCacheStrategy = MatrixViewCache(),
-) where {Ti <: Integer}
+    cache_strategy::AbstractCacheStrategy = _choose_default_device_storage(builder.backend),
+)
     build_l1prec(builder, A, partsize, true, η, sweep, cache_strategy)
 end
 
@@ -504,6 +538,69 @@ struct SymmetricL1GSSweep{LowerOp <: BlockLowerSolveOperator, UpperOp <: BlockUp
        AbstractL1GSSweepPlan
     lop::LowerOp
     uop::UpperOp
+end
+
+################################
+## REPL Display Functionality ##
+################################
+_sweep_label(::ForwardL1GSSweep)   = "Forward"
+_sweep_label(::BackwardL1GSSweep)  = "Backward"
+_sweep_label(::SymmetricL1GSSweep) = "Symmetric"
+
+# The "primary" block operator of a sweep plan (used to pick the cache strategy / matrix info).
+_primary_op(s::ForwardL1GSSweep)   = s.op
+_primary_op(s::BackwardL1GSSweep)  = s.op
+_primary_op(s::SymmetricL1GSSweep) = s.lop
+
+_cache_strategy_label(::BlockStrictLowerView) = "MatrixViewCache"
+_cache_strategy_label(::BlockStrictUpperView) = "MatrixViewCache"
+_cache_strategy_label(::PackedStrictLower)    = "PackedBufferCache"
+_cache_strategy_label(::PackedStrictUpper)    = "PackedBufferCache"
+
+# Pull a representative matrix/vector from the sweep plan so we can report size + eltype.
+_repr_data(s::AbstractL1GSSweepPlan) = _repr_data(_primary_op(s))
+_repr_data(op::BlockLowerSolveOperator) = _repr_data(_cache(op), op.D_DL1)
+_repr_data(op::BlockUpperSolveOperator) = _repr_data(_cache(op), op.D_DL1)
+# MatrixView path: A is available, report (size(A), eltype(A))
+_repr_data(c::BlockStrictLowerView, _D_DL1) = (size(c.A), eltype(c.A))
+_repr_data(c::BlockStrictUpperView, _D_DL1) = (size(c.A), eltype(c.A))
+# Packed path: no A; derive N from D_DL1, eltype from the packed buffer.
+_repr_data(c::PackedStrictLower, D_DL1) = ((length(D_DL1), length(D_DL1)), eltype(c.SLbuffer))
+_repr_data(c::PackedStrictUpper, D_DL1) = ((length(D_DL1), length(D_DL1)), eltype(c.SUbuffer))
+
+function Base.show(io::IO, s::AbstractL1GSSweepPlan)
+    print(io, _sweep_label(s), "L1GSSweep(", _cache_strategy_label(_cache(_primary_op(s))), ")")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", p::BlockPartitioning)
+    println(io, "BlockPartitioning:")
+    println(io, "  partsize:  ", p.partsize)
+    println(io, "  nparts:    ", p.nparts)
+    println(io, "  nchunks:   ", p.nchunks)
+    println(io, "  chunksize: ", p.chunksize)
+    print(io,   "  backend:   ", nameof(typeof(p.backend)))
+end
+
+function Base.show(io::IO, P::L1GSPreconditioner)
+    backend_name = nameof(typeof(P.partitioning.backend))
+    print(io, "L1GSPreconditioner(", _sweep_label(P.sweep), ", ", backend_name,
+          ", nparts=", P.partitioning.nparts, ")")
+end
+
+function Base.show(io::IO, ::MIME"text/plain", P::L1GSPreconditioner)
+    (; partitioning, sweep) = P
+    backend_name = nameof(typeof(partitioning.backend))
+    msz, mel = _repr_data(sweep)
+    println(io, "L1GSPreconditioner")
+    println(io, "  backend:        ", backend_name)
+    println(io, "  matrix:         ", msz[1], "×", msz[2], " {", mel, "}")
+    println(io, "  sweep:          ", _sweep_label(sweep))
+    println(io, "  cache strategy: ", _cache_strategy_label(_cache(_primary_op(sweep))))
+    println(io, "  partitioning:")
+    println(io, "    partsize:  ", partitioning.partsize)
+    println(io, "    nparts:    ", partitioning.nparts)
+    println(io, "    nchunks:   ", partitioning.nchunks)
+    print(io,   "    chunksize: ", partitioning.chunksize)
 end
 
 get_data(A::AbstractSparseMatrix) = A
