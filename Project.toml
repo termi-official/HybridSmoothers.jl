@@ -23,6 +23,7 @@ HybridSmoothersGPUArraysExt = "GPUArrays"
 
 [compat]
 Adapt = "4"
+AlgebraicMultigrid = "2"
 GPUArrays = "11.4.0"
 KernelAbstractions = "0.9.34"
 LinearSolve = "3"
