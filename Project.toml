@@ -8,28 +8,35 @@ Adapt = "79e6a3ab-5dfb-504d-930d-738a2a938a0e"
 KernelAbstractions = "63c18a36-062a-441e-b654-da1e3ab1ce7c"
 LinearAlgebra = "37e2e46d-f89d-539d-b4ee-838fcccc9c8e"
 LinearSolve = "7ed4a6bd-45f5-4d41-b270-4a48e9bafcae"
+MatrixDepot = "b51810bb-c9f3-55da-ae3c-350fc1fbce05"
 SparseArrays = "2f01184e-e22b-5df5-ae63-d93ebab69eaf"
 SparseMatricesCSR = "a0a7dd2c-ebf4-11e9-1f05-cf50bc540ca1"
 TimerOutputs = "a759f4b9-e2f1-59dc-863e-4aeb61b1ea8f"
 
 [weakdeps]
+AlgebraicMultigrid = "2169fc97-5a83-5252-b627-83903c6c433c"
 GPUArrays = "0c68f7d7-f131-5f86-a1c3-88cf8149b2d7"
 
 [extensions]
+HybridSmoothersAMGExt = "AlgebraicMultigrid"
 HybridSmoothersGPUArraysExt = "GPUArrays"
 
 [compat]
 Adapt = "4"
+AlgebraicMultigrid = "2"
 GPUArrays = "11.4.0"
 KernelAbstractions = "0.9.34"
 LinearSolve = "3"
+MatrixDepot = "1.1.0"
 SparseMatricesCSR = "0.6"
 TimerOutputs = "0.5"
 julia = "1.10"
 
 [extras]
 MatrixDepot = "b51810bb-c9f3-55da-ae3c-350fc1fbce05"
+Random = "9a3f8284-a2c9-5f02-9a11-845980a1fd5c"
+SparseMatricesCSR = "a0a7dd2c-ebf4-11e9-1f05-cf50bc540ca1"
 Test = "8dfed614-e22c-5e08-85e1-65c5234f0b40"
 
 [targets]
-test = ["Test", "MatrixDepot"]
+test = ["Test", "MatrixDepot", "Random", "SparseMatricesCSR"]
