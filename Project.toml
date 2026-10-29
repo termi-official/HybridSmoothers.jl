@@ -27,7 +27,7 @@ GPUArrays = "11.4.0"
 KernelAbstractions = "0.9.34"
 LinearSolve = "3, 4, 5"
 SparseMatricesCSR = "0.6"
-TimerOutputs = "0.5"
+TimerOutputs = "0.5, 1"
 julia = "1.10"
 
 [extras]
