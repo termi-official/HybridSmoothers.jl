@@ -3,7 +3,6 @@ using SparseArrays
 using LinearSolve
 using SparseMatricesCSR
 using KernelAbstractions
-using MatrixDepot
 using HybridSmoothers
 using LinearAlgebra: Symmetric
 
@@ -17,10 +16,7 @@ using LinearAlgebra: Symmetric
 ## `run_l1gs_gpu_tests(backend; …)`.      ##
 ############################################
 
-function poisson_test_matrix(N)
-    # 1D Poisson with Dirichlet BCs (symmetric tridiagonal CSC).
-    return spdiagm(0 => 2 * ones(N), -1 => -ones(N - 1), 1 => -ones(N - 1))
-end
+include(joinpath(@__DIR__, "..", "test_matrices.jl"))
 
 function test_sym_result(
     backend,
@@ -361,13 +357,13 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
         end
 
         @testset "Solution with LinearSolve" begin
-            @testset "Non-Symmetric A (HB/sherman5)" begin
-                md = mdopen("HB/sherman5")
-                A = md.A
-                b = md.b[:, 1]
+            @testset "Non-Symmetric A (anisotropic convection-diffusion)" begin
+                # ε = 0.1: the 10-row blocks run along the strongly coupled direction.
+                A = convection_diffusion_matrix(60; ε = 0.1)
+                b = ones(size(A, 1))
                 test_l1gs_prec(
                     backend,
-                    "PackedBuffer, ForwardSweep HB/sherman5",
+                    "PackedBuffer, ForwardSweep convection-diffusion",
                     A,
                     b,
                     ForwardSweep(),
@@ -376,7 +372,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
                 )
                 test_l1gs_prec(
                     backend,
-                    "MatrixView, ForwardSweep HB/sherman5",
+                    "MatrixView, ForwardSweep convection-diffusion",
                     A,
                     b,
                     ForwardSweep(),
@@ -385,7 +381,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
                 )
                 test_l1gs_prec(
                     backend,
-                    "PackedBuffer, BackwardSweep HB/sherman5",
+                    "PackedBuffer, BackwardSweep convection-diffusion",
                     A,
                     b,
                     BackwardSweep(),
@@ -394,7 +390,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
                 )
                 test_l1gs_prec(
                     backend,
-                    "MatrixView, BackwardSweep HB/sherman5",
+                    "MatrixView, BackwardSweep convection-diffusion",
                     A,
                     b,
                     BackwardSweep(),
@@ -404,14 +400,14 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
             end
 
             @testset "Symmetric A" begin
-                @testset "Wathen Matrix" begin
-                    A = matrixdepot("wathen", 120)
+                @testset "Anisotropic 2D Poisson" begin
+                    A = poisson2d_matrix(100; ε = 0.1)
                     b = ones(size(A, 1))
 
                     # Forward/Backward sweeps yield a non-symmetric preconditioner; use GMRES, not CG.
                     test_l1gs_prec(
                         backend,
-                        "PackedBuffer, ForwardSweep wathen",
+                        "PackedBuffer, ForwardSweep poisson2d",
                         A,
                         b,
                         ForwardSweep(),
@@ -422,7 +418,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
                     )
                     test_l1gs_prec(
                         backend,
-                        "MatrixView, ForwardSweep wathen",
+                        "MatrixView, ForwardSweep poisson2d",
                         A,
                         b,
                         ForwardSweep(),
@@ -434,7 +430,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
 
                     test_l1gs_prec(
                         backend,
-                        "PackedBuffer, BackwardSweep wathen",
+                        "PackedBuffer, BackwardSweep poisson2d",
                         A,
                         b,
                         BackwardSweep(),
@@ -445,7 +441,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
                     )
                     test_l1gs_prec(
                         backend,
-                        "MatrixView, BackwardSweep wathen",
+                        "MatrixView, BackwardSweep poisson2d",
                         A,
                         b,
                         BackwardSweep(),
@@ -457,7 +453,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
 
                     test_l1gs_prec(
                         backend,
-                        "PackedBuffer, SymmetricSweep wathen",
+                        "PackedBuffer, SymmetricSweep poisson2d",
                         A,
                         b,
                         SymmetricSweep(),
@@ -468,7 +464,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
                     )
                     test_l1gs_prec(
                         backend,
-                        "MatrixView, SymmetricSweep wathen",
+                        "MatrixView, SymmetricSweep poisson2d",
                         A,
                         b,
                         SymmetricSweep(),
@@ -479,15 +475,13 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
                     )
                 end
 
-                # Pothen/bodyy6: 19366×19366 Symmetric{Float64, SparseMatrixCSC{Float64, Int64}}
-                @testset "Pothen/bodyy6 (Symmetric type)" begin
-                    md = mdopen("Pothen/bodyy6")
-                    A = md.A
+                @testset "Anisotropic 2D Poisson (Symmetric type)" begin
+                    A = Symmetric(poisson2d_matrix(120; ε = 0.1))
                     b = ones(size(A, 1))
 
                     test_l1gs_prec(
                         backend,
-                        "MatrixViewCache, ForwardSweep bodyy6",
+                        "MatrixViewCache, ForwardSweep Symmetric poisson2d",
                         A,
                         b,
                         ForwardSweep(),
@@ -496,7 +490,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
                     )
                     test_l1gs_prec(
                         backend,
-                        "PackedBufferCache, ForwardSweep bodyy6",
+                        "PackedBufferCache, ForwardSweep Symmetric poisson2d",
                         A,
                         b,
                         ForwardSweep(),
@@ -506,7 +500,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
 
                     test_l1gs_prec(
                         backend,
-                        "MatrixViewCache, BackwardSweep bodyy6",
+                        "MatrixViewCache, BackwardSweep Symmetric poisson2d",
                         A,
                         b,
                         BackwardSweep(),
@@ -515,7 +509,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
                     )
                     test_l1gs_prec(
                         backend,
-                        "PackedBufferCache, BackwardSweep bodyy6",
+                        "PackedBufferCache, BackwardSweep Symmetric poisson2d",
                         A,
                         b,
                         BackwardSweep(),
@@ -525,7 +519,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
 
                     test_l1gs_prec(
                         backend,
-                        "MatrixViewCache, SymmetricSweep bodyy6",
+                        "MatrixViewCache, SymmetricSweep Symmetric poisson2d",
                         A,
                         b,
                         SymmetricSweep(),
@@ -534,7 +528,7 @@ function run_l1gs_gpu_tests(backend; testset_name = "L1GS Preconditioner - GPU")
                     )
                     test_l1gs_prec(
                         backend,
-                        "PackedBufferCache, SymmetricSweep bodyy6",
+                        "PackedBufferCache, SymmetricSweep Symmetric poisson2d",
                         A,
                         b,
                         SymmetricSweep(),
